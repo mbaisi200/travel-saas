@@ -10,15 +10,31 @@ export interface HotelSearchRequest {
   maxPrice?: number
 }
 
-// Hotelbeds API — https://developers.hotelbeds.com
 const HOTELBEDS_API = 'https://api.test.hotelbeds.com/hotel-api/1.0'
 const HOTELBEDS_API_PROD = 'https://api.hotelbeds.com/hotel-api/1.0'
+
+async function sha256Hex(input: string): Promise<string> {
+  const data = new TextEncoder().encode(input)
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+  const hashArray = Array.from(new Uint8Array(hashBuffer))
+  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+async function buildHeaders(apiKey: string, secret: string) {
+  const timestamp = Math.floor(Date.now() / 1000)
+  const signature = await sha256Hex(`${apiKey}${secret}${timestamp}`)
+  return {
+    'Api-Key': apiKey,
+    'X-Signature': signature,
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+  }
+}
 
 export async function searchHotelsHotelbeds(params: HotelSearchRequest): Promise<RoomOffer[]> {
   const apiKey = process.env.NEXT_PUBLIC_HOTELBEDS_API_KEY
   const secret = process.env.NEXT_PUBLIC_HOTELBEDS_SECRET
 
-  // Sem chave — usa dados mock
   if (!apiKey || !secret) {
     await new Promise((r) => setTimeout(r, 500))
     const results = generateMockHotels(params.destination, params.checkIn, params.checkOut, params.guests)
@@ -30,19 +46,14 @@ export async function searchHotelsHotelbeds(params: HotelSearchRequest): Promise
     })
   }
 
-  // Com chave — consulta API real
   try {
     const isTest = process.env.NEXT_PUBLIC_HOTELBEDS_ENV !== 'production'
     const baseUrl = isTest ? HOTELBEDS_API : HOTELBEDS_API_PROD
+    const headers = await buildHeaders(apiKey, secret)
 
     const response = await fetch(`${baseUrl}/hotels`, {
       method: 'POST',
-      headers: {
-        'Api-Key': apiKey,
-        'X-Signature': secret, // Hotelbeds usa X-Signature em test ou assinatura SHA256
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
+      headers,
       body: JSON.stringify({
         stay: {
           checkIn: params.checkIn,
@@ -55,7 +66,7 @@ export async function searchHotelsHotelbeds(params: HotelSearchRequest): Promise
         }],
         destination: {
           type: 'CITY',
-          code: params.destination, // Código Hotelbeds da cidade
+          code: params.destination,
         },
         filter: {
           minRate: '1',
