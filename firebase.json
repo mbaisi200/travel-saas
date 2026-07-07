@@ -1,0 +1,22 @@
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "functions": {
+    "source": "functions",
+    "runtime": "nodejs22"
+  },
+  "hosting": {
+    "source": ".",
+    "ignore": ["**/.*"],
+    "rewrites": [
+      { "source": "/dashboard/**", "run": { "serviceId": "nextjs-ssr", "region": "southamerica-east1" }},
+      { "source": "/api/**", "run": { "serviceId": "nextjs-ssr", "region": "southamerica-east1" }},
+      { "source": "**", "destination": "/index.html" }
+    ]
+  },
+  "storage": {
+    "rules": "storage.rules"
+  }
+}

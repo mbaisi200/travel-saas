@@ -1,0 +1,80 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isMaster() {
+      return request.auth != null
+          && request.auth.token.master == true;
+    }
+
+    function tenantFromUid() {
+      return request.auth.uid.split('|')[0];
+    }
+
+    function isFromSameTenant(tenantId) {
+      return request.auth != null && tenantFromUid() == tenantId;
+    }
+
+    function hasRole(allowedRoles) {
+      return request.auth != null
+          && (allowedRoles).hasAny([request.auth.token.role]);
+    }
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // ─── Planos (global — só Master) ───
+    match /plans/{planId} {
+      allow read, write: if isMaster();
+    }
+
+    // ─── Raiz do Tenant ───
+    match /tenants/{tenantId} {
+      allow read: if isMaster() || isFromSameTenant(tenantId);
+      allow write: if isMaster();
+      allow create: if false;
+
+      // ─── Todas as subcoleções do tenant ───
+      match /{document=**} {
+        allow read: if isMaster()
+            || (isFromSameTenant(tenantId) && isAuthenticated());
+
+        allow write: if isMaster()
+            || (isFromSameTenant(tenantId)
+                && hasRole(['admin', 'manager', 'agent'])
+                && request.resource.data.keys().hasAll(['createdAt']));
+      }
+
+      // ─── Financeiro: só admin/manager ───
+      match /payments/{paymentId} {
+        allow read: if isMaster()
+            || (isFromSameTenant(tenantId) && hasRole(['admin', 'manager']));
+        allow write: if isMaster()
+            || (isFromSameTenant(tenantId) && hasRole(['admin', 'manager']));
+      }
+
+      // ─── Config do tenant: só admin ───
+      match /config/{configId} {
+        allow read: if isMaster()
+            || (isFromSameTenant(tenantId) && isAuthenticated());
+        allow write: if isMaster()
+            || (isFromSameTenant(tenantId) && hasRole(['admin']));
+      }
+
+      // ─── Activity Log: append-only ───
+      match /activity_log/{logId} {
+        allow read: if isMaster()
+            || (isFromSameTenant(tenantId) && hasRole(['admin', 'manager']));
+        allow create: if isMaster()
+            || (isFromSameTenant(tenantId) && isAuthenticated());
+        allow update, delete: if false;
+      }
+    }
+
+    // ─── Negar tudo o resto ───
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
