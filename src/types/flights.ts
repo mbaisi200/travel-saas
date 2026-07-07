@@ -49,15 +49,6 @@ export interface FlightSearchParams {
   maxStops?: number
 }
 
-export interface FlightSearchParams {
-  origin: string
-  destination: string
-  departDate: string
-  returnDate?: string
-  passengers: number
-  cabin?: 'economy' | 'business' | 'first'
-}
-
 export interface FlightSearchResult {
   id: string
   params: FlightSearchParams
