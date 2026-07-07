@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { adminAuth, adminDb } from '@/lib/firebase-admin'
+import { getAdmin } from '@/lib/firebase-admin'
 import { randomUUID } from 'crypto'
 
 export async function POST(req: Request) {
@@ -10,9 +10,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Campos obrigatórios: email, password, name, agencyName' }, { status: 400 })
     }
 
+    // Inicializa Admin SDK sob demanda (não falha se não configurado em build time)
+    let adminAuth: any, adminDb: any
+    try {
+      const admin = getAdmin()
+      adminAuth = admin.adminAuth
+      adminDb = admin.adminDb
+    } catch {
+      return NextResponse.json({ error: 'Cadastro temporariamente indisponível. Admin SDK não configurado.' }, { status: 500 })
+    }
+
     const tenantId = agencyName.toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 30)
 
-    // Criar usuário no Firebase Auth com tenantId no uid
     const user = await adminAuth.createUser({
       email,
       password,
@@ -20,14 +29,12 @@ export async function POST(req: Request) {
       displayName: name,
     })
 
-    // Setar custom claims
     await adminAuth.setCustomUserClaims(user.uid, {
       tenantId,
       role: 'admin',
       master: false,
     })
 
-    // Criar tenant no Firestore
     await adminDb.doc(`tenants/${tenantId}`).set({
       name: agencyName,
       slug: tenantId,
@@ -40,7 +47,6 @@ export async function POST(req: Request) {
       },
     })
 
-    // Criar perfil do usuário
     await adminDb.doc(`tenants/${tenantId}/users/${user.uid}`).set({
       name,
       email,
