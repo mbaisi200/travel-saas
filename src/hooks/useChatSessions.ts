@@ -33,7 +33,7 @@ export function useChatSessions(status?: 'open' | 'closed') {
     queryFn: async () => {
       if (!tenantId) return []
       const ref = tenantCollectionRef(tenantId, 'chat_history')
-      const constraints = [orderBy('updatedAt', 'desc')]
+      const constraints: any[] = [orderBy('updatedAt', 'desc')]
       if (status) constraints.unshift(where('status', '==', status))
       const q = query(ref, ...constraints)
       const snap = await getDocs(q)
